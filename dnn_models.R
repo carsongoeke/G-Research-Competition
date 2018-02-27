@@ -310,7 +310,7 @@ callbacks_list <- list(
   ) )
 
 # Train the model
-dnn %>% fit(x_train, y_train,
+dnn %>% fit(x_train_boot, y_train_boot,
             batch_size = 20000,
             epochs = 100,
             callbacks = callbacks_list,
@@ -318,10 +318,12 @@ dnn %>% fit(x_train, y_train,
             validation_split = 0.2
 )
 
+# Evaluate the model with competition metric (weighted MSE)
+wMSE <- sum((weights_train * (as.numeric(y_train) - predict(dnn, x_train))^2)) / nrow(x_train)
 
 # Predictions -------------------------------------------------------------------- 
 
-# boost
+# dnn
 dnn_predictions <- cbind(test$Index, predict(dnn, x_test)) %>% as.data.frame()
 colnames(dnn_predictions) <- c('Index', 'y')
 dnn_predictions$Index %<>% as.integer() # submission doesn't accept numeric index
