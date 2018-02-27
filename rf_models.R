@@ -263,19 +263,6 @@ x_train %<>% scale(center = mean, scale = sd)
 #x_holdout %<>% scale(center = mean, scale = sd)
 x_test %<>% scale(center = mean, scale = sd)
 
-# random subspaces to create more independent models
-# we'll create 4 random subspaces of about half the predictors to make
-# sure there is sufficient coverage of the features
-randcols1 <- sample(seq(1:ncol(x_train)), 0.4 * ncol(x_train))
-randcols2 <- sample(seq(1:ncol(x_train)), 0.4 * ncol(x_train))
-randcols3 <- sample(seq(1:ncol(x_train)), 0.4 * ncol(x_train))
-randcols4 <- sample(seq(1:ncol(x_train)), 0.4 * ncol(x_train))
-
-# we'll bootstrap sample
-randrows1 <- sample(seq(1:nrow(x_train)), nrow(x_train), replace = TRUE)
-randrows2 <- sample(seq(1:nrow(x_train)), nrow(x_train), replace = TRUE)
-randrows3 <- sample(seq(1:nrow(x_train)), nrow(x_train), replace = TRUE)
-randrows4 <- sample(seq(1:nrow(x_train)), nrow(x_train), replace = TRUE)
 
 # clean up environment
 rm(test_days, test_inv_xs, test_inv2_xs, test_market,
@@ -295,6 +282,10 @@ ranger <- ranger(formula = y~.,
                   min.node.size = 3,
                   case.weights = weights_train,
                   verbose = TRUE)
+
+train_preds <- predict(ranger, df_train, predict.all = FALSE, type = 'response')
+# Evaluate the model with competition metric (weighted MSE)
+wMSE <- sum((weights_train * (as.numeric(y_train) - train_preds)^2)) / nrow(x_train)
 
 # Predictions -------------------------------------------------------------------- 
 ranger_preds <- predict(ranger, df_test, predict.all = FALSE, type = 'response')
