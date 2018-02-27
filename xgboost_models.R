@@ -287,6 +287,9 @@ simple_boost <- xgboost(data = x_train,
                       #  early_stopping_rounds = 6, # stop after loss doesnt change for 5 rounds
                         weight = weights_train) # use weights provided for training
 
+# Evaluate the model with competition metric (weighted MSE)
+wMSE <- sum((weights_train * (as.numeric(y_train) - predict(simple_boost, x_train))^2)) / nrow(x_train)
+
 # boost predictions
 boost_predictions <- cbind(test$Index, predict(simple_boost, x_test)) %>% as.data.frame()
 colnames(boost_predictions) <- c('Index', 'y')
