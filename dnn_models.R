@@ -284,12 +284,17 @@ y_train_boot <- y_train[weighted_bootstrap_sample,]
 # initialize model
 dnn <- keras_model_sequential()
 dnn %>% 
-  layer_gaussian_noise(stddev = 0.03, input_shape = c(ncol(x_train))) %>%
-  layer_dense(units = 32, activation = 'elu', input_shape = c(ncol(x_train))) %>% 
+  layer_gaussian_noise(stddev = 0.25, input_shape = c(ncol(x_train))) %>%
+  layer_dense(units = 32,
+              activation = 'elu',
+              input_shape = c(ncol(x_train)),
+              kernel_regularizer = regularizer_l1_l2(0.3, 0.3)) %>% 
   layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 16, activation = 'elu') %>%
+  layer_dense(units = 16,
+              activation = 'elu',
+              kernel_regularizer = regularizer_l1_l2(0.3, 0.3)) %>%
   layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
+  layer_dense(units = 1, activation = 'linear') # using tanh b/c y is bounded
 
 # Compile the model
 dnn %>% compile(
@@ -330,4 +335,4 @@ dnn_predictions$Index %<>% as.integer() # submission doesn't accept numeric inde
 dnn_predictions <- dnn_predictions[order(dnn_predictions$Index),] # submission needs to be in original order
 
 # Export Predictions
-write.csv(dnn_predictions, '~/Desktop/gresearch/dnn.csv', na = '', row.names = FALSE)
+write.csv(dnn_predictions, '~/Desktop/gresearch/dnn3.csv', na = '', row.names = FALSE)
