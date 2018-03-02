@@ -284,17 +284,12 @@ y_train_boot <- y_train[weighted_bootstrap_sample,]
 # initialize model
 dnn <- keras_model_sequential()
 dnn %>% 
-  layer_gaussian_noise(stddev = 0.25, input_shape = c(ncol(x_train))) %>%
-  layer_dense(units = 32,
-              activation = 'elu',
-              input_shape = c(ncol(x_train)),
-              kernel_regularizer = regularizer_l1_l2(0.3, 0.3)) %>% 
+ # layer_gaussian_noise(stddev = 0.05, input_shape = c(ncol(x_train))) %>%
+  layer_dense(units = 32, activation = 'elu', input_shape = c(ncol(x_train))) %>% 
   layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 16,
-              activation = 'elu',
-              kernel_regularizer = regularizer_l1_l2(0.3, 0.3)) %>%
+  layer_dense(units = 16, activation = 'elu') %>%
   layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 1, activation = 'linear') # using tanh b/c y is bounded
+  layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
 
 # Compile the model
 dnn %>% compile(
@@ -306,7 +301,7 @@ dnn %>% compile(
 callbacks_list <- list(
   callback_early_stopping(
     monitor = "loss",
-    patience = 3
+    patience = 4
   ),
   callback_model_checkpoint(
     filepath = "my_model",
@@ -320,7 +315,7 @@ dnn %>% fit(x_train_boot, y_train_boot,
             epochs = 100,
             callbacks = callbacks_list,
             verbose = 1,
-            validation_split = 0.2
+            validation_split = 0.3
 )
 
 # Evaluate the model with competition metric (weighted MSE)
@@ -328,11 +323,11 @@ wMSE <- sum((weights_train * (as.numeric(y_train) - predict(dnn, x_train))^2)) /
 
 # Predictions -------------------------------------------------------------------- 
 
-# dnn
+# boost
 dnn_predictions <- cbind(test$Index, predict(dnn, x_test)) %>% as.data.frame()
 colnames(dnn_predictions) <- c('Index', 'y')
 dnn_predictions$Index %<>% as.integer() # submission doesn't accept numeric index
 dnn_predictions <- dnn_predictions[order(dnn_predictions$Index),] # submission needs to be in original order
 
 # Export Predictions
-write.csv(dnn_predictions, '~/Desktop/gresearch/dnn3.csv', na = '', row.names = FALSE)
+write.csv(dnn_predictions, '~/Desktop/gresearch/dnn.csv', na = '', row.names = FALSE)
