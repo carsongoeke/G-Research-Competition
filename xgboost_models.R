@@ -66,6 +66,22 @@ test_inv2_xs <- test_inv2_xs[,2:12] # don't need Index
 colnames(train_inv2_xs) <- c('inv2.x0', 'inv2.x1', 'inv2.x2', 'inv2.x3A', 'inv2.x3B', 'inv2.x3C', 'inv2.x3D', 'inv2.x3E',  'inv2.x4', 'inv2.x5', 'inv2.x6')
 colnames(test_inv2_xs) <- colnames(train_inv2_xs)
 
+# Cosine Transform
+train_cos_xs <- sapply(train[,grepl('x',colnames(train))], function(x){cos(x*2*pi)}) %>% as.data.frame()
+test_cos_xs <- sapply(test[,grepl('x',colnames(test))], function(x){cos(x*2*pi)}) %>% as.data.frame()
+train_cos_xs <- train_cos_xs[,2:12] # don't need Index
+test_cos_xs <- test_cos_xs[,2:12] # don't need Index
+colnames(train_cos_xs) <- c('cos.x0', 'cos.x1', 'cos.x2', 'cos.x3A', 'cos.x3B', 'cos.x3C', 'cos.x3D', 'cos.x3E',  'cos.x4', 'cos.x5', 'cos.x6')
+colnames(test_cos_xs) <- colnames(train_cos_xs)
+
+# Sine Transform
+train_sin_xs <- sapply(train[,grepl('x',colnames(train))], function(x){sin(x*2*pi)}) %>% as.data.frame()
+test_sin_xs <- sapply(test[,grepl('x',colnames(test))], function(x){sin(x*2*pi)}) %>% as.data.frame()
+train_sin_xs <- train_sin_xs[,2:12] # don't need Index
+test_sin_xs <- test_sin_xs[,2:12] # don't need Index
+colnames(train_sin_xs) <- c('sin.x0', 'sin.x1', 'sin.x2', 'sin.x3A', 'sin.x3B', 'sin.x3C', 'sin.x3D', 'sin.x3E',  'sin.x4', 'sin.x5', 'sin.x6')
+colnames(test_sin_xs) <- colnames(train_sin_xs)
+
 # Interaction Terms # could write this with a nested loop but fuck it
 interactions <- function(df) {
   
