@@ -2,7 +2,6 @@
 # G Research Financial Forecasting Competition 
 # /////////////////////////////////////////////////////////////////////////// 
 # - Carson Goeke
-# - 2/3/17
 
 # Load Packages ------------------------------------------------------------- 
 library(keras) # neural network
@@ -302,9 +301,9 @@ dnn <- keras_model_sequential()
 dnn %>% 
  # layer_gaussian_noise(stddev = 0.05, input_shape = c(ncol(x_train))) %>%
   layer_dense(units = 32, activation = 'elu', input_shape = c(ncol(x_train))) %>% 
-  layer_dropout(rate = 0.5) %>%
+  layer_dropout(rate = 0.2) %>%
   layer_dense(units = 16, activation = 'elu') %>%
-  layer_dropout(rate = 0.5) %>%
+  layer_dropout(rate = 0.2) %>%
   layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
 
 # Compile the model
@@ -331,7 +330,7 @@ dnn %>% fit(x_train_boot, y_train_boot,
             epochs = 100,
             callbacks = callbacks_list,
             verbose = 1,
-            validation_split = 0.3
+            validation_split = 0.2
 )
 
 # Evaluate the model with competition metric (weighted MSE)
