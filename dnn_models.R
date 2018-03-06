@@ -2,6 +2,7 @@
 # G Research Financial Forecasting Competition 
 # /////////////////////////////////////////////////////////////////////////// 
 # - Carson Goeke
+# - 2/3/17
 
 # Load Packages ------------------------------------------------------------- 
 library(keras) # neural network
@@ -14,6 +15,7 @@ library(DataCombine) # Creating lags
 library(magrittr) # pipe operator
 library(ggplot2) # visualization
 library(DescTools) # Skew and Kurtosis
+library(e1071) # svm
 
 # Read in data -------------------------------------------------------------- 
 train <- read_csv('~/Desktop/gresearch/train.csv')
@@ -82,7 +84,8 @@ test_sin_xs <- test_sin_xs[,2:12] # don't need Index
 colnames(train_sin_xs) <- c('sin.x0', 'sin.x1', 'sin.x2', 'sin.x3A', 'sin.x3B', 'sin.x3C', 'sin.x3D', 'sin.x3E',  'sin.x4', 'sin.x5', 'sin.x6')
 colnames(test_sin_xs) <- colnames(train_sin_xs)
 
-# Interaction Terms # could write this with a nested loop but screw it
+
+# Interaction Terms # could write this with a nested loop but fuck it
 interactions <- function(df) {
   
   # x0
@@ -171,8 +174,8 @@ train %<>% interactions()
 test %<>% interactions()
 
 # Merge with other transforms
-train <- cbind(train, train_log_xs, train_square_xs, train_inv_xs, train_inv2_xs)
-test <- cbind(test, test_log_xs, test_square_xs, test_inv_xs, test_inv2_xs)
+train <- cbind(train, train_log_xs, train_square_xs, train_inv_xs, train_inv2_xs, train_cos_xs)
+test <- cbind(test, test_log_xs, test_square_xs, test_inv_xs, test_inv2_xs, test_cos_xs)
 rm(train_log_xs, test_log_xs, train_square_xs, test_square_xs, train_inv_xs, test_inv_xs, train_inv2_xs, test_in2v_xs)
 
 # get day of week by taking day mod 7
@@ -291,18 +294,19 @@ x_test %<>% scale(center = mean, scale = sd)
 
 # Keras Deep Learning Model ---------------------------------------------------------------
 
-# want to sample with respect to observation weights
-weighted_bootstrap_sample <- sample(seq(1:nrow(x_train)), 2*nrow(x_train), replace = TRUE, prob = weights_train)
+# want to sample with respect to observation weights 
+# but they're very skewed so we'll take the log and square it, so that some obvs aren't
+log_weights_train_sq <- log(weights_train)^2
+
+weighted_bootstrap_sample <- sample(seq(1:nrow(x_train)), 2*nrow(x_train), replace = TRUE, prob = log_weights_train_sq)
 x_train_boot <- x_train[weighted_bootstrap_sample,]
 y_train_boot <- y_train[weighted_bootstrap_sample,]
+          
 
 # initialize model
 dnn <- keras_model_sequential()
 dnn %>% 
- # layer_gaussian_noise(stddev = 0.05, input_shape = c(ncol(x_train))) %>%
-  layer_dense(units = 32, activation = 'elu', input_shape = c(ncol(x_train))) %>% 
-  layer_dropout(rate = 0.2) %>%
-  layer_dense(units = 16, activation = 'elu') %>%
+  layer_dense(units = 16, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.01)) %>% 
   layer_dropout(rate = 0.2) %>%
   layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
 
@@ -330,11 +334,18 @@ dnn %>% fit(x_train_boot, y_train_boot,
             epochs = 100,
             callbacks = callbacks_list,
             verbose = 1,
-            validation_split = 0.2
+            validation_split = 0.1,
+            shuffle = TRUE
 )
 
+# plot distribution of weights
+weights <- dnn$get_weights()
+weights[[1]] %>% as.numeric() %>% density() %>% plot() # layer 1 weights
+weights[[2]] %>% as.numeric() %>% density() %>% plot() # hidden layer weights
+weights[[3]] %>% as.numeric() %>% density() %>% plot() # hidden layer biases
+
 # Evaluate the model with competition metric (weighted MSE)
-wMSE <- sum((weights_train * (as.numeric(y_train) - predict(dnn, x_train))^2)) / nrow(x_train)
+log(weights_train * (as.numeric(y_train) - predict(dnn, x_train))^2) %>% density() %>% plot()
 
 # Predictions -------------------------------------------------------------------- 
 
