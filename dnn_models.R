@@ -2,7 +2,6 @@
 # G Research Financial Forecasting Competition 
 # /////////////////////////////////////////////////////////////////////////// 
 # - Carson Goeke
-# - 2/3/17
 
 # Load Packages ------------------------------------------------------------- 
 library(keras) # neural network
@@ -296,18 +295,18 @@ x_test %<>% scale(center = mean, scale = sd)
 
 # want to sample with respect to observation weights 
 # but they're very skewed so we'll take the log and square it, so that some obvs aren't
-log_weights_train_sq <- log(weights_train)^2
+log_weights_train_sq <- log(weights_train)^4
 
 weighted_bootstrap_sample <- sample(seq(1:nrow(x_train)), 2*nrow(x_train), replace = TRUE, prob = log_weights_train_sq)
 x_train_boot <- x_train[weighted_bootstrap_sample,]
 y_train_boot <- y_train[weighted_bootstrap_sample,]
-          
+
 
 # initialize model
 dnn <- keras_model_sequential()
 dnn %>% 
-  layer_dense(units = 16, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.01)) %>% 
-  layer_dropout(rate = 0.2) %>%
+  layer_dense(units = 64, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.01)) %>% 
+  layer_dropout(rate = 0.5) %>%
   layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
 
 # Compile the model
