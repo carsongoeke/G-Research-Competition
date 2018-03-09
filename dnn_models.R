@@ -295,7 +295,8 @@ x_test %<>% scale(center = mean, scale = sd)
 
 # want to sample with respect to observation weights 
 # but they're very skewed so we'll take the log and square it, so that some obvs aren't
-log_weights_train_sq <- log(weights_train)^2
+# Edit -- now cubed to get closer to original weighting
+log_weights_train_sq <- abs(log(weights_train)^3)
 
 weighted_bootstrap_sample <- sample(seq(1:nrow(x_train)), 2*nrow(x_train), replace = TRUE, prob = log_weights_train_sq)
 x_train_boot <- x_train[weighted_bootstrap_sample,]
