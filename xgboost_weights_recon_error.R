@@ -1,7 +1,6 @@
 # /////////////////////////////////////////////////////////////////////////// 
 # G Research Financial Forecasting Competition 
 # /////////////////////////////////////////////////////////////////////////// 
-# - Carson Goeke
 
 # Load Packages ------------------------------------------------------------- 
 library(keras) # neural network
@@ -33,6 +32,9 @@ test[is.na(test$x1),'x1'] <- med_x1
 train[is.na(train$x2),'x2'] <- med_x2
 test[is.na(test$x2),'x2'] <- med_x2
 
+
+
+
 # log transform all x vars 
 train_log_xs <- sapply(train[,grepl('x',colnames(train))], function(x){log(x + 0.0000001)}) %>% as.data.frame()
 test_log_xs <- sapply(test[,grepl('x',colnames(test))], function(x){log(x + 0.0000001)}) %>% as.data.frame()
@@ -49,104 +51,53 @@ test_log2_xs <- test_log2_xs[,2:12] # don't need Index
 colnames(train_log2_xs) <- c('l2.x0', 'l2.x1', 'l2.x2', 'l2.x3A', 'l2.x3B', 'l2.x3C', 'l2.x3D', 'l2.x3E',  'l2.x4', 'l2.x5', 'l2.x6')
 colnames(test_log2_xs) <- colnames(train_log2_xs)
 
+# Square Transform
+train_square_xs <- sapply(train[,grepl('x',colnames(train))], function(x){x^2}) %>% as.data.frame()
+test_square_xs <- sapply(test[,grepl('x',colnames(test))], function(x){x^2}) %>% as.data.frame()
+train_square_xs <- train_square_xs[,2:12] # don't need Index
+test_square_xs <- test_square_xs[,2:12] # don't need Index
+colnames(train_square_xs) <- c('sq.x0', 'sq.x1', 'sq.x2', 'sq.x3A', 'sq.x3B', 'sq.x3C', 'sq.x3D', 'sq.x3E',  'sq.x4', 'sq.x5', 'sq.x6')
+colnames(test_square_xs) <- colnames(train_square_xs)
+
+# Inverse Transform
+train_inv_xs <- sapply(train[,grepl('x',colnames(train))], function(x){1/(x + 0.0000001)}) %>% as.data.frame()
+test_inv_xs <- sapply(test[,grepl('x',colnames(test))], function(x){1/(x + 0.0000001)}) %>% as.data.frame()
+train_inv_xs <- train_inv_xs[,2:12] # don't need Index
+test_inv_xs <- test_inv_xs[,2:12] # don't need Index
+colnames(train_inv_xs) <- c('inv.x0', 'inv.x1', 'inv.x2', 'inv.x3A', 'inv.x3B', 'inv.x3C', 'inv.x3D', 'inv.x3E',  'inv.x4', 'inv.x5', 'inv.x6')
+colnames(test_inv_xs) <- colnames(train_inv_xs)
+
+# Inverse Square Transform
+train_inv2_xs <- sapply(train[,grepl('x',colnames(train))], function(x){1/(x + 0.0000001)^2}) %>% as.data.frame()
+test_inv2_xs <- sapply(test[,grepl('x',colnames(test))], function(x){1/(x + 0.0000001)^2}) %>% as.data.frame()
+train_inv2_xs <- train_inv2_xs[,2:12] # don't need Index
+test_inv2_xs <- test_inv2_xs[,2:12] # don't need Index
+colnames(train_inv2_xs) <- c('inv2.x0', 'inv2.x1', 'inv2.x2', 'inv2.x3A', 'inv2.x3B', 'inv2.x3C', 'inv2.x3D', 'inv2.x3E',  'inv2.x4', 'inv2.x5', 'inv2.x6')
+colnames(test_inv2_xs) <- colnames(train_inv2_xs)
+
+# Cosine Transform
+train_cos_xs <- sapply(train[,grepl('x',colnames(train))], function(x){cos(x*2*pi)}) %>% as.data.frame()
+test_cos_xs <- sapply(test[,grepl('x',colnames(test))], function(x){cos(x*2*pi)}) %>% as.data.frame()
+train_cos_xs <- train_cos_xs[,2:12] # don't need Index
+test_cos_xs <- test_cos_xs[,2:12] # don't need Index
+colnames(train_cos_xs) <- c('cos.x0', 'cos.x1', 'cos.x2', 'cos.x3A', 'cos.x3B', 'cos.x3C', 'cos.x3D', 'cos.x3E',  'cos.x4', 'cos.x5', 'cos.x6')
+colnames(test_cos_xs) <- colnames(train_cos_xs)
+
 # neg exp transform (only seems good fro x1 and x2)
 train$neg_exp1 <- exp(-train$x1)
 test$neg_exp1 <- exp(-test$x1)
 train$neg_exp2 <- exp(-train$x2)
 test$neg_exp2 <- exp(-test$x2)
 
-# Interaction Terms # could write this with a nested loop but fuck it
- interactions <- function(df) {
-  # x0
-  df$x0.x1 <- df$x0 * df$x1
-  df$x0.x2 <- df$x0 * df$x2
-  df$x0.x3A <- df$x0 * df$x3A
-  df$x0.x3B <- df$x0 * df$x3B
-  df$x0.x3B <- df$x0 * df$x3B
-  df$x0.x3C <- df$x0 * df$x3C
-  df$x0.x3D <- df$x0 * df$x3D
-  df$x0.x3E <- df$x0 * df$x3E
-  df$x0.x4 <- df$x0 * df$x4
-  df$x0.x5 <- df$x0 * df$x5
-  df$x0.x6 <- df$x0 * df$x6
-  
-  # x1
-  df$x1.x2 <- df$x1 * df$x2
-  df$x1.x3A <- df$x1 * df$x3A
-  df$x1.x3B <- df$x1 * df$x3B
-  df$x1.x3B <- df$x1 * df$x3B
-  df$x1.x3C <- df$x1 * df$x3C
-  df$x1.x3D <- df$x1 * df$x3D
-  df$x1.x3E <- df$x1 * df$x3E
-  df$x1.x4 <- df$x1 * df$x4
-  df$x1.x5 <- df$x1 * df$x5
-  df$x1.x6 <- df$x1 * df$x6
-  
-  # x2
-  df$x2.x3A <- df$x2 * df$x3A
-  df$x2.x3B <- df$x2 * df$x3B
-  df$x2.x3B <- df$x2 * df$x3B
-  df$x2.x3C <- df$x2 * df$x3C
-  df$x2.x3D <- df$x2 * df$x3D
-  df$x2.x3E <- df$x2 * df$x3E
-  df$x2.x4 <- df$x2 * df$x4
-  df$x2.x5 <- df$x2 * df$x5
-  df$x2.x6 <- df$x2 * df$x6
-  
-  # x3A
-  df$x3A.x3B <- df$x3A * df$x3B
-  df$x3A.x3B <- df$x3A * df$x3B
-  df$x3A.x3C <- df$x3A * df$x3C
-  df$x3A.x3D <- df$x3A * df$x3D
-  df$x3A.x3E <- df$x3A * df$x3E
-  df$x3A.x4 <- df$x3A * df$x4
-  df$x3A.x5 <- df$x3A * df$x5
-  df$x3A.x6 <- df$x3A * df$x6
-  
-  # x3B
-  df$x3B.x3C <- df$x3B * df$x3C
-  df$x3B.x3D <- df$x3B * df$x3D
-  df$x3B.x3E <- df$x3B * df$x3E
-  df$x3B.x4 <- df$x3B * df$x4
-  df$x3B.x5 <- df$x3B * df$x5
-  df$x3B.x6 <- df$x3B * df$x6
-  
-  # x3C
-  df$x3C.x3D <- df$x3C * df$x3D
-  df$x3C.x3E <- df$x3C * df$x3E
-  df$x3C.x4 <- df$x3C * df$x4
-  df$x3C.x5 <- df$x3C * df$x5
-  df$x3C.x6 <- df$x3C * df$x6
-  
-  # x3D
-  df$x3D.x3E <- df$x3D * df$x3E
-  df$x3D.x4 <- df$x3D * df$x4
-  df$x3D.x5 <- df$x3D * df$x5
-  df$x3D.x6 <- df$x3D * df$x6
-  
-  # x3E
-  df$x3E.x4 <- df$x3E * df$x4
-  df$x3E.x5 <- df$x3E * df$x5
-  df$x3E.x6 <- df$x3E * df$x6
-  
-  # x4
-  df$x4.x5 <- df$x4 * df$x5
-  df$x4.x6 <- df$x4 * df$x6
-  
-  # x5
-  df$x5.x6 <- df$x5 * df$x6
-  
-  # return df
-  return(df)
-}
- 
+
+train <- cbind(train, train_log_xs, train_log2_xs, train_square_xs, train_inv_xs, train_inv2_xs, train_cos_xs)
+test <- cbind(test, test_log_xs, test_log2_xs, test_square_xs, test_inv_xs, test_inv2_xs, test_cos_xs)
+rm(train_log_xs, test_log_xs, train_square_xs, test_square_xs, train_inv_xs, test_inv_xs, train_inv2_xs, test_in2v_xs)
+
 #train %<>% interactions()
 #test %<>% interactions()
 
 # Merge with other transforms
-train <- cbind(train, train_log_xs, train_log2_xs)
-test <- cbind(test, test_log_xs, test_log2_xs)
-rm(train_log_xs, test_log_xs, train_log2_xs, test_log2_xs)
 
 # get day of week by taking day mod 7
 train$day_of_week <- train$Day %% 7
@@ -234,28 +185,25 @@ x_train[is.na(x_train)] <- 0
 x_test[is.na(x_test)] <- 0
 
 # normalize the data 
-med <- apply(x_train, 2, median) # data is unstable
-mad <- apply(x_train, 2, mad) # median absolute deviation for same reason
-x_train %<>% scale(center = med, scale = mad)
-x_test %<>% scale(center = med, scale = mad)
+mean <- apply(x_train, 2, mean) # data is unstable
+sd <- apply(x_train, 2, sd) # median absolute deviation for same reason
+x_train %<>% scale(center = mean, scale = sd)
+x_test %<>% scale(center = mean, scale = sd)
 
 y_med <- median(y_train)
 y_mad <- mad(y_train)
 y_scaled <- scale(y_train, center = y_med, scale = y_mad)
 
 # clean up environment
-rm(test_days, test_inv_xs, test_inv2_xs, test_market,
-   train_days, test_inv2_xs, test_inv2_xs, test_market,
-   y_stats)
 
 # Reconstruction Error ------------------------------------------------------
 ae <- keras_model_sequential()
 ae %>% 
   #layer_gaussian_noise(stddev = 0.1, input_shape = c(ncol(x_train))) %>%
-  layer_dense(units = 10, activation = 'elu', input_shape = c(ncol(x_train[,1:13]))) %>%
-  layer_dense(units = 5, activation = 'elu') %>%
-  layer_dense(units = 10, activation = 'elu') %>%
-  layer_dense(units = ncol(x_train[,1:13]), activation = 'linear') # using tanh b/c y is bounded
+  layer_dense(units = 15, activation = 'elu', input_shape = c(ncol(x_train[,1:26]))) %>%
+  layer_dense(units = 7, activation = 'elu') %>%
+  layer_dense(units = 15, activation = 'elu') %>%
+  layer_dense(units = ncol(x_train[,1:26]), activation = 'linear') # using tanh b/c y is bounded
 
 # Compile the model
 ae %>% compile(
@@ -265,9 +213,9 @@ ae %>% compile(
 )
 
 # Train the model
-ae %>% fit(x_train[,1:13], x_train[,1:13],
+ae %>% fit(x_train[,1:26], x_train[,1:26],
            batch_size = 10000,
-           epochs = 30,
+           epochs = 50,
            verbose = 1,
            validation_split = 0.3,
            shuffle = TRUE
@@ -276,21 +224,21 @@ ae %>% fit(x_train[,1:13], x_train[,1:13],
 # Predict Weights -----------------------------------------------------------
 set.seed(123)
 weights_boost <- xgboost(data = x_train,
-                        label = weights_train,
-                        eta = 0.3, # learning rate
-                        lambda = 0.3, # l2 regularization
-                        alpha = 0.3, # l1 regularization
-                        verbose = 1,
-                        nrounds = 23,
-                        early_stopping_rounds = 4, # stop after loss doesnt change for 5 rounds
-                        weight = weights_train) # use weights provided for training
+                         label = weights_train,
+                         eta = 0.3, # learning rate
+                         lambda = 0.3, # l2 regularization
+                         alpha = 0.3, # l1 regularization
+                         verbose = 1,
+                         nrounds = 23,
+                         early_stopping_rounds = 4, # stop after loss doesnt change for 5 rounds
+                         weight = weights_train) # use weights provided for training
 
 # Predict Weights to x_test -----------------------------------------------------
 weights_test <- predict(weights_boost, x_test) %>% as.matrix()
 
 # Predict reconstruction error to x_train and x_test ----------------------------
-train_recon <- apply((x_train[,1:13] - predict(ae, x_train[,1:13]))^2, 1, sum)
-test_recon <- apply((x_test[,1:13] - predict(ae, x_test[,1:13]))^2, 1, sum)
+train_recon <- apply((x_train[,1:26] - predict(ae, x_train[,1:26]))^2, 1, sum)
+test_recon <- apply((x_test[,1:26] - predict(ae, x_test[,1:26]))^2, 1, sum)
 
 # Add reconstruction error and weights to datasets
 x_train <- cbind(x_train, weights_train, train_recon)
@@ -302,25 +250,23 @@ library(gbm)
 
 # gaussian gbm
 
-y_scaled <- mean(y_train)
-
 set.seed(321)
 gbm_gaussian <- gbm.fit(x = x_train,
-                     y = as.numeric(y_scaled),
-                     w = as.numeric(weights_train),
-                     distribution = "gaussian",
-                     interaction.depth = 2,
-                     n.trees = 100,
-                     bag.fraction = 0.5,
-                     nTrain = nrow(x_train)*0.8,
-                     response.name = 'y')
+                        y = as.numeric(y_train),
+                        w = as.numeric(weights_train),
+                        distribution = "gaussian",
+                        interaction.depth =6,
+                        n.trees = 200,
+                        bag.fraction = 0.6,
+                        nTrain = nrow(x_train)*0.9,
+                        response.name = 'y')
 
 
 # boost predictions
-boost_predictions <- cbind(test$Index, predict(gbm_gaussian, x_test)*y_mad + y_med) %>% as.data.frame()
+boost_predictions <- cbind(test$Index, predict(gbm_gaussian, x_test)) %>% as.data.frame()
 colnames(boost_predictions) <- c('Index', 'y')
 boost_predictions$Index %<>% as.integer() # submission doesn't accept numeric index
 boost_predictions <- boost_predictions[order(boost_predictions$Index),] # submission needs to be in original order
 
 # Export Predictions
-write.csv(boost_predictions, '~/Desktop/gresearch/gbm.3.15.17.csv', na = '', row.names = FALSE)
+write.csv(boost_predictions, '~/Desktop/gresearch/gbm.3.17.17.csv', na = '', row.names = FALSE)
