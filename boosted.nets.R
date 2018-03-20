@@ -250,11 +250,11 @@ rm(weights_boost, ae, test_days, test_inv2_xs, test_log2_xs, test_cos_xs,
 # Boosted Neural Networks ----------------------------------------------------------------------
 
 # create list that will contain the neural networks predictions
-boosted_nets <- matrix(0, ncol = 50, nrow = nrow(x_test))
-boosted_train <- matrix(0, ncol = 50, nrow = nrow(x_train))
+boosted_nets <- matrix(0, ncol = 25, nrow = nrow(x_test))
+boosted_train <- matrix(0, ncol = 25, nrow = nrow(x_train))
 ensemble_preds <- as.numeric(rep(0, nrow(x_test)))
 model_weights <- as.numeric(rep(0, ncol(boosted_train)))
-rand_cols <- sample(seq(1:ncol(x_train)), 0.5*ncol(x_train)) # also using random subspace method
+rand_cols <- sample(seq(1:ncol(x_train)), 0.4*ncol(x_train)) # also using random subspace method
 
 for (i in 1:ncol(boosted_nets)) {
   
@@ -268,8 +268,8 @@ for (i in 1:ncol(boosted_nets)) {
   # initialize model
   dnn <- keras_model_sequential()
   dnn %>% 
-    layer_dense(units = 8, activation = 'elu', input_shape = c(ncol(x_train_boot)), kernel_regularizer = regularizer_l2(0.01)) %>% 
-    layer_dropout(rate = 0.5) %>%
+    layer_dense(units = 16, activation = 'elu', input_shape = c(ncol(x_train_boot))) %>% 
+    #layer_dropout(rate = 0.3) %>%
     layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
   
   # Compile the model
@@ -282,7 +282,7 @@ for (i in 1:ncol(boosted_nets)) {
   callbacks_list <- list(
     callback_early_stopping(
       monitor = "loss",
-      patience = 2
+      patience = 3
     ),
     callback_model_checkpoint(
       filepath = "my_model",
@@ -293,7 +293,7 @@ for (i in 1:ncol(boosted_nets)) {
   # Train the model
   dnn %>% fit(x_train_boot, y_train_boot,
               batch_size = 20000,
-              epochs = 25,
+              epochs = 20,
               callbacks = callbacks_list,
               verbose = 1,
               validation_split = 0.1,
@@ -332,7 +332,7 @@ for (i in 1:ncol(boosted_nets)) {
   
   # use boosted weights calculated from the biggest errors of the last model
   bootstrap_ind <- sample(seq(1:nrow(x_train)), nrow(x_train), replace = TRUE, prob = new_weights_train)
-  rand_cols <- sample(seq(1:ncol(x_train)), 0.5*ncol(x_train)) # also using random subspace method
+  rand_cols <- sample(seq(1:ncol(x_train)), 0.4*ncol(x_train)) # also using random subspace method
   x_train_boot <- x_train[bootstrap_ind, rand_cols]
   y_train_boot <- y_train[bootstrap_ind, ]
 }
@@ -344,4 +344,4 @@ dnn_predictions$Index %<>% as.integer() # submission doesn't accept numeric inde
 dnn_predictions <- dnn_predictions[order(dnn_predictions$Index),] # submission needs to be in original order
 
 # Export Predictions
-write.csv(dnn_predictions, '~/Desktop/gresearch/dnn_boosted_weighted_50_random_subspace.csv', na = '', row.names = FALSE)
+write.csv(dnn_predictions, '~/Desktop/gresearch/dnn25boost_0.4randsub_16node_noreg_nodrop.csv', na = '', row.names = FALSE)
