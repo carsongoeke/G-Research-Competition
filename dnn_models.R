@@ -1,4 +1,4 @@
-# /////////////////////////////////////////////////////////////////////////// 
+-# /////////////////////////////////////////////////////////////////////////// 
 # G Research Financial Forecasting Competition 
 # /////////////////////////////////////////////////////////////////////////// 
 # - Carson Goeke
@@ -286,74 +286,86 @@ x_train[is.na(x_train)] <- 0
 x_test[is.na(x_test)] <- 0
 
 # normalize the data 
-mean <- apply(x_train, 2, mean)
-sd <- apply(x_train, 2, sd)
-x_train %<>% scale(center = mean, scale = sd)
-x_test %<>% scale(center = mean, scale = sd)
+mins <- apply(x_train, 2, min)
+maxs <- apply(x_train, 2, max)
+x_train %<>% scale(center = mins, scale = (maxs - mins))
+x_test %<>% scale(center = mins, scale = (maxs - mins))
 
 # Keras Deep Learning Model ---------------------------------------------------------------
 
 # want to sample with respect to observation weights 
 # but they're very skewed so we'll take the log and square it, so that some obvs aren't
 # Edit -- now cubed to get closer to original weighting
-log_weights_train_sq <- abs(log(weights_train)^3)
 
-weighted_bootstrap_sample <- sample(seq(1:nrow(x_train)), 2*nrow(x_train), replace = TRUE, prob = log_weights_train_sq)
-x_train_boot <- x_train[weighted_bootstrap_sample,]
-y_train_boot <- y_train[weighted_bootstrap_sample,]
+n_dnns <- 10
+bagged_dnn_predictions <- matrix(0, nrow = nrow(x_test), ncol = n_elms)
+bagged_dnn_train_preds <- matrix(0, nrow = nrow(x_train), ncol = n_elms)
 
 
-# initialize model
-dnn <- keras_model_sequential()
-dnn %>% 
-  layer_dense(units = 64, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.005)) %>% 
-  layer_dropout(rate = 0.5) %>%
-  layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
+for(i in 1:n_dnns) {
 
-# Compile the model
-dnn %>% compile(
-  loss = 'mse',
-  optimizer = 'rmsprop',
-  metric = c('kullback_leibler_divergence')
-)
+  weighted_bootstrap_sample <- sample(seq(1:nrow(x_train)), nrow(x_train), replace = TRUE, prob = weights_train)
+ # rand_cols <- sample(seq(1:ncol(x_train)), 0.4*ncol(xtrain))
+  x_train_boot <- x_train[weighted_bootstrap_sample,]
+  y_train_boot <- y_train[weighted_bootstrap_sample,]
+  
+  # initialize model
+  dnn <- keras_model_sequential()
+  dnn %>% 
+    layer_dense(units = 64, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.001)) %>% 
+    layer_dropout(rate = 0.5) %>%
+  #  layer_dense(units = 16, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.001)) %>% 
+   # layer_dropout(rate = 0.5) %>%
+  #  layer_dense(units = 8, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l2(0.01)) %>% 
+  #  layer_dropout(rate = 0.5) %>%
+    layer_dense(units = 1, activation = 'tanh') # using tanh b/c y is bounded
+  
+  # Compile the model
+  dnn %>% compile(
+    loss = 'mse',
+    optimizer = 'rmsprop',
+    metric = c('kullback_leibler_divergence')
+  )
+  
+  callbacks_list <- list(
+    callback_early_stopping(
+      monitor = "loss",
+      patience = 4
+    ),
+    callback_model_checkpoint(
+      filepath = "my_model",
+      monitor = "val_loss",
+      save_best_only = TRUE
+    ) )
+  
+  # Train the model
+  dnn %>% fit(x_train, y_train,
+              batch_size = 10000,
+              epochs = 100,
+              callbacks = callbacks_list,
+              verbose = 1,
+              validation_split = 0.2,
+              shuffle = TRUE
+  )
+  
+  # Record Predictions
+  bagged_dnn_predictions[,i] <- predict(dnn, x_test)
+  bagged_dnn_train_preds[,i] <- predict(dnn, x_train)
 
-callbacks_list <- list(
-  callback_early_stopping(
-    monitor = "loss",
-    patience = 4
-  ),
-  callback_model_checkpoint(
-    filepath = "my_model",
-    monitor = "val_loss",
-    save_best_only = TRUE
-  ) )
-
-# Train the model
-dnn %>% fit(x_train_boot, y_train_boot,
-            batch_size = 20000,
-            epochs = 100,
-            callbacks = callbacks_list,
-            verbose = 1,
-            validation_split = 0.1,
-            shuffle = TRUE
-)
-
-# plot distribution of weights
-weights <- dnn$get_weights()
-weights[[1]] %>% as.numeric() %>% density() %>% plot() # layer 1 weights
-weights[[2]] %>% as.numeric() %>% density() %>% plot() # hidden layer weights
-weights[[3]] %>% as.numeric() %>% density() %>% plot() # hidden layer biases
+}
 
 # Evaluate the model with competition metric (weighted MSE)
-log(weights_train * (as.numeric(y_train) - predict(dnn, x_train))^2) %>% density() %>% plot()
+errors <- weights_train * abs(as.numeric(y_train) - apply(bagged_dnn_train_preds, 1, mean))
+errors %<>% as.numeric()
+errors %>% sum()
 
 # Predictions -------------------------------------------------------------------- 
 
 # boost
-dnn_predictions <- cbind(test$Index, predict(dnn, x_test)) %>% as.data.frame()
+dnn_predictions <- cbind(test$Index, apply(bagged_dnn_predictions, 1, mean)) %>% as.data.frame()
 colnames(dnn_predictions) <- c('Index', 'y')
 dnn_predictions$Index %<>% as.integer() # submission doesn't accept numeric index
 dnn_predictions <- dnn_predictions[order(dnn_predictions$Index),] # submission needs to be in original order
 
 # Export Predictions
-write.csv(dnn_predictions, '~/Desktop/gresearch/dnn.csv', na = '', row.names = FALSE)
+write.csv(dnn_predictions, '~/Desktop/gresearch/dnn_min_max.csv', na = '', row.names = FALSE)
