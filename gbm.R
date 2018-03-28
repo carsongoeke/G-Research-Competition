@@ -16,6 +16,36 @@ library(DescTools) # Skew and Kurtosis
 # Read in data -------------------------------------------------------------- 
 train <- read_csv('~/Desktop/gresearch/train.csv')
 test <- read_csv('~/Desktop/gresearch/test.csv')
+# Lagged Y ------------------------------------------------------------------
+fake_test <- test
+fake_test$y <- NA
+test_train_combo <- rbind(fake_test, train[,1:16])
+test_train_combo <- test_train_combo[order(test_train_combo$Day),]
+
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag1',
+                          slideBy = -1)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag2',
+                          slideBy = -2)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag3',
+                          slideBy = -3)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag4',
+                          slideBy = -4)
 
 # Data Munging -------------------------------------------------------------- 
 
@@ -31,9 +61,6 @@ train[is.na(train$x1),'x1'] <- med_x1
 test[is.na(test$x1),'x1'] <- med_x1
 train[is.na(train$x2),'x2'] <- med_x2
 test[is.na(test$x2),'x2'] <- med_x2
-
-
-
 
 # log transform all x vars 
 train_log_xs <- sapply(train[,grepl('x',colnames(train))], function(x){log(x + 0.0000001)}) %>% as.data.frame()
@@ -89,7 +116,6 @@ test$neg_exp1 <- exp(-test$x1)
 train$neg_exp2 <- exp(-train$x2)
 test$neg_exp2 <- exp(-test$x2)
 
-
 train <- cbind(train, train_log_xs, train_log2_xs, train_square_xs, train_inv_xs, train_inv2_xs, train_cos_xs)
 test <- cbind(test, test_log_xs, test_log2_xs, test_square_xs, test_inv_xs, test_inv2_xs, test_cos_xs)
 rm(train_log_xs, test_log_xs, train_square_xs, test_square_xs, train_inv_xs, test_inv_xs, train_inv2_xs, test_in2v_xs)
@@ -111,25 +137,41 @@ test$day_of_month <- test$Day %% 30
 y_stats <- train %>% group_by(Stock) %>% summarize(mean_y = mean(y),
                                                    median_y = median(y),
                                                    sd_y = sd(y),
-                                                   skew_y = Skew(y),
-                                                   kurt_y = Kurt(y)) %>% as.data.frame()
-
+                                                   mad_y = mad(y)) %>% as.data.frame()
 y_stats[is.na(y_stats),] <- 0
+
+x_stats <- train %>% group_by(Stock) %>% summarize(mean_x4 = mean(x4),
+                                                   mean_x3E = mean(x3E),
+                                                   mean_x0 = mean(x0),
+                                                   median_x4 = median(x4),
+                                                   median_x3E = median(x3E),
+                                                   median_x0 = median(x0),
+                                                   sd_x4 = sd(x4),
+                                                   sd_x3E = sd(x3E),
+                                                   sd_x0 = sd(x0),
+                                                   mad_x4 = mad(x4),
+                                                   mad_x3E = mad(x3E),
+                                                   mad_x0 = mad(x0))
+
 
 # sparse vars
 y_stats$low_y <- (y_stats$median_y < quantile(y_stats$median_y)[2]) %>% as.numeric()
 y_stats$high_y <- (y_stats$median_y > quantile(y_stats$median_y)[4]) %>% as.numeric()
-y_stats$high_sd <- (y_stats$sd_y > quantile(y_stats$sd_y)[4]) %>% as.numeric()
-y_stats$left_skew <- (y_stats$skew_y < quantile(y_stats$skew_y)[2]) %>% as.numeric()
-y_stats$right_skew <- (y_stats$skew_y > quantile(y_stats$skew_y)[4]) %>% as.numeric()
-y_stats$high_kurt <- (y_stats$kurt_y > quantile(y_stats$kurt_y)[4]) %>% as.numeric()
 
 # replace na values
 y_stats[is.na(y_stats)] <- 0
+x_stats[is.na(x_stats)] <- 0
 
 # merge with train and test
 train <- merge(train, y_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
+train <- merge(train, x_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
+
 test <- merge(test, y_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
+test <- merge(test, x_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
+
+
+
+
 
 # convert day of week and Market to dummy vars
 train$day_of_week %<>% as.factor()
@@ -169,6 +211,11 @@ test$Market %<>% as.numeric()
 train$day_of_week %<>% as.numeric()
 test$day_of_week %<>% as.numeric()
 
+# merge lagged ys
+lagged <- test_train_combo[, c('Day', 'Stock', 'y_lag1', 'y_lag2', 'y_lag3', 'y_lag4')]
+train <- merge(train, lagged, by = c('Day', 'Stock'), all.x = TRUE)
+test <- merge(test, lagged, by = c('Day', 'Stock'), all.x = TRUE)
+
 # Data Preparation --------------------------------------------------------------- 
 
 # get train and test matrices needed for xgboost
@@ -185,16 +232,14 @@ x_train[is.na(x_train)] <- 0
 x_test[is.na(x_test)] <- 0
 
 # normalize the data 
-mean <- apply(x_train, 2, mean) # data is unstable
-sd <- apply(x_train, 2, sd) # median absolute deviation for same reason
-x_train %<>% scale(center = mean, scale = sd)
-x_test %<>% scale(center = mean, scale = sd)
-
-y_med <- median(y_train)
-y_mad <- mad(y_train)
-y_scaled <- scale(y_train, center = y_med, scale = y_mad)
-
-# clean up environment
+#mins <- apply(x_train, 2, min)
+#maxs <- apply(x_train, 2, max)
+#x_train %<>% scale(center = mins, scale = (maxs - mins))
+#x_test %<>% scale(center = mins, scale = (maxs - mins))
+means <- apply(x_train, 2, mean)
+sds <- apply(x_train, 2, sd)
+x_train %<>% scale(center = means, scale = sds)
+x_test %<>% scale(center = means, scale = sds)
 
 # Reconstruction Error ------------------------------------------------------
 ae <- keras_model_sequential()
@@ -229,8 +274,8 @@ weights_boost <- xgboost(data = x_train,
                          lambda = 0.3, # l2 regularization
                          alpha = 0.3, # l1 regularization
                          verbose = 1,
-                         nrounds = 23,
-                         early_stopping_rounds = 4, # stop after loss doesnt change for 5 rounds
+                         nrounds = 50,
+                         early_stopping_rounds = 2, # stop after loss doesnt change for 2 rounds
                          weight = weights_train) # use weights provided for training
 
 # Predict Weights to x_test -----------------------------------------------------
@@ -240,9 +285,26 @@ weights_test <- predict(weights_boost, x_test) %>% as.matrix()
 train_recon <- apply((x_train[,1:26] - predict(ae, x_train[,1:26]))^2, 1, sum)
 test_recon <- apply((x_test[,1:26] - predict(ae, x_test[,1:26]))^2, 1, sum)
 
-# Add reconstruction error and weights to datasets
+# Add reconstruction error and weights to datasets and renormalize
 x_train <- cbind(x_train, weights_train, train_recon)
 x_test <- cbind(x_test, weights_test, test_recon)
+
+# normalize the data 
+means <- apply(x_train, 2, mean)
+sds <- apply(x_train, 2, sd)
+x_train %<>% scale(center = means, scale = sds)
+x_test %<>% scale(center = means, scale = sds)
+
+# get holdout data for stacking at the end
+#holdout_ind <- sample(seq(1:nrow(x_train)),0.1*nrow(x_train))
+#x_holdout <- x_train[holdout_ind,]
+#y_holout <- y_train[holdout_ind,]
+#weights_holdout <- weights_train[holdout_ind,]
+
+# Clean up
+rm(test_cos_xs, train_cos_xs, train_days, test_days, train_market, test_market, ae, 
+   weights_boost, test_inv2_xs, test_log2_xs, y_stats, train_log2_xs)
+
 
 # Simple GBM Model ---------------------------------------------------------------------------
 # GBM
