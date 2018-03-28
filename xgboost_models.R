@@ -2,7 +2,6 @@
 # G Research Financial Forecasting Competition 
 # /////////////////////////////////////////////////////////////////////////// 
 # - Carson Goeke
-# - 2/3/17
 
 # Load Packages ------------------------------------------------------------- 
 library(keras) # neural network
