@@ -17,6 +17,37 @@ library(DescTools) # Skew and Kurtosis
 train <- read_csv('~/Desktop/gresearch/train.csv')
 test <- read_csv('~/Desktop/gresearch/test.csv')
 
+# Lagged Y ------------------------------------------------------------------
+fake_test <- test
+fake_test$y <- NA
+test_train_combo <- rbind(fake_test, train[,1:16])
+test_train_combo <- test_train_combo[order(test_train_combo$Day),]
+
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag1',
+                          slideBy = -1)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag2',
+                          slideBy = -2)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag3',
+                          slideBy = -3)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag4',
+                          slideBy = -4)
+
 # Data Munging -------------------------------------------------------------- 
 
 # summary stats
@@ -139,6 +170,10 @@ train <- merge(train, x_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
 test <- merge(test, y_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
 test <- merge(test, x_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
 
+
+
+
+
 # convert day of week and Market to dummy vars
 train$day_of_week %<>% as.factor()
 test$day_of_week %<>% as.factor()
@@ -176,6 +211,11 @@ train$Market %<>% as.numeric()
 test$Market %<>% as.numeric()
 train$day_of_week %<>% as.numeric()
 test$day_of_week %<>% as.numeric()
+
+# merge lagged ys
+lagged <- test_train_combo[, c('Day', 'Stock', 'y_lag1', 'y_lag2', 'y_lag3', 'y_lag4')]
+train <- merge(train, lagged, by = c('Day', 'Stock'), all.x = TRUE)
+test <- merge(test, lagged, by = c('Day', 'Stock'), all.x = TRUE)
 
 # Data Preparation --------------------------------------------------------------- 
 
@@ -257,15 +297,16 @@ x_train %<>% scale(center = means, scale = sds)
 x_test %<>% scale(center = means, scale = sds)
 
 # get holdout data for stacking at the end
-holdout_ind <- sample(seq(1:nrow(x_train)),0.1*nrow(x_train))
-x_holdout <- x_train[holdout_ind,]
-y_holout <- y_train[holdout_ind,]
-weights_holdout <- weights_train[holdout_ind,]
+#holdout_ind <- sample(seq(1:nrow(x_train)),0.1*nrow(x_train))
+#x_holdout <- x_train[holdout_ind,]
+#y_holout <- y_train[holdout_ind,]
+#weights_holdout <- weights_train[holdout_ind,]
 
 # Clean up
 rm(test_cos_xs, train_cos_xs, train_days, test_days, train_market, test_market, ae, 
    weights_boost, test_inv2_xs, test_log2_xs, y_stats, train_log2_xs)
 
+# RF --------------------------------------------------------
 library(ranger)
 df_train <- as.data.frame(cbind(y_train, x_train))
 colnames(df_train)[1] <- 'y'
