@@ -17,6 +17,37 @@ library(DescTools) # Skew and Kurtosis
 train <- read_csv('~/Desktop/gresearch/train.csv')
 test <- read_csv('~/Desktop/gresearch/test.csv')
 
+# Lagged Y ------------------------------------------------------------------
+fake_test <- test
+fake_test$y <- NA
+test_train_combo <- rbind(fake_test, train[,1:16])
+test_train_combo <- test_train_combo[order(test_train_combo$Day),]
+
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag1',
+                          slideBy = -1)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag2',
+                          slideBy = -2)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag3',
+                          slideBy = -3)
+test_train_combo <- slide(test_train_combo, 
+                          Var = 'y', 
+                          TimeVar = 'Day', 
+                          GroupVar = 'Stock', 
+                          NewVar = 'y_lag4',
+                          slideBy = -4)
+
 # Data Munging -------------------------------------------------------------- 
 
 # summary stats
@@ -139,6 +170,10 @@ train <- merge(train, x_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
 test <- merge(test, y_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
 test <- merge(test, x_stats, by = 'Stock', all.x = TRUE, sort = FALSE)
 
+
+
+
+
 # convert day of week and Market to dummy vars
 train$day_of_week %<>% as.factor()
 test$day_of_week %<>% as.factor()
@@ -176,6 +211,11 @@ train$Market %<>% as.numeric()
 test$Market %<>% as.numeric()
 train$day_of_week %<>% as.numeric()
 test$day_of_week %<>% as.numeric()
+
+# merge lagged ys
+lagged <- test_train_combo[, c('Day', 'Stock', 'y_lag1', 'y_lag2', 'y_lag3', 'y_lag4')]
+train <- merge(train, lagged, by = c('Day', 'Stock'), all.x = TRUE)
+test <- merge(test, lagged, by = c('Day', 'Stock'), all.x = TRUE)
 
 # Data Preparation --------------------------------------------------------------- 
 
@@ -266,14 +306,15 @@ x_test %<>% scale(center = means, scale = sds)
 rm(test_cos_xs, train_cos_xs, train_days, test_days, train_market, test_market, ae, 
    weights_boost, test_inv2_xs, test_log2_xs, y_stats, train_log2_xs)
 
+
 # ELM Models -------------------------------------------------------------- 
 library(elmNN)
 
 # Initialize parameters
 
-num_models <- 2
+num_models <- 5
 num_neurons <- 64
-col_fraction <- 0.9
+col_fraction <- 0.5
 
 
 n_elms <- num_models
@@ -295,7 +336,7 @@ for (r in 1:n_elms) {
   elm_model <- elmtrain( x = x_train_boot,
                          y = y_train_boot,
                          nhid = n_hidden,
-                         actfun = 'radbas')
+                         actfun = 'purelin')
   
   # Record Predictions
   bagged_elm_predictions[,r] <- predict(elm_model, x_test[,rand_col])
@@ -312,10 +353,53 @@ cat('Weighted Sum of Errors:', wse, '\n',
     'n hidden:', n_hidden, '\n',
     'rand sub:', rand_sub, '\n\n')
 
-
 # ELM Predictions
 elm_preds <- apply(bagged_elm_predictions, 1, mean)
 elm_preds <- cbind(test$Index, elm_preds) %>% as.data.frame()
 colnames(elm_preds) <- c('Index', 'y')
 elm_preds$Index %<>% as.integer() # submission doesn't accept numeric index
 elm_preds <- elm_preds[order(elm_preds$Index),] # submission needs to be in original order
+
+# DNN ------------------------------------------------------------------------------------
+boot_ind <- sample(1:nrow(x_train), nrow(x_train), prob = log(weights_train)^2)
+
+# initialize model
+dnn <- keras_model_sequential()
+dnn %>% 
+  layer_dense(units = 100, activation = 'elu', input_shape = c(ncol(x_train)), kernel_regularizer = regularizer_l1_l2(0.3, 0.1)) %>% 
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 100, activation = 'elu', kernel_regularizer = regularizer_l1_l2(0.1, 0.1)) %>% 
+  layer_dropout(rate = 0.5) %>%
+ # layer_dense(units = 16, activation = 'elu', kernel_regularizer = regularizer_l2(0.01)) %>% 
+ # layer_dropout(rate = 0.3) %>%
+  layer_dense(units = 1, activation = 'linear') # using tanh b/c y is bounded
+
+# Compile the model
+dnn %>% compile(
+  loss = 'mse',
+  optimizer = 'rmsprop',
+  metric = c('kullback_leibler_divergence')
+)
+
+# Train the model
+dnn %>% fit(x_train, y_train,
+            batch_size = 1000,
+            epochs = 10,
+            verbose = 1,
+            validation_split = 0.2,
+            shuffle = TRUE,
+            sample_weights = weights_train
+)
+
+wse <- (abs(y_train - predict(dnn, x_train) * weights_train)) %>% as.numeric() %>% sum()
+
+
+
+# dnn
+dnn_predictions <- cbind(test$Index, predict(dnn, x_test)) %>% as.data.frame()
+colnames(dnn_predictions) <- c('Index', 'y')
+dnn_predictions$Index %<>% as.integer() # submission doesn't accept numeric index
+dnn_predictions <- dnn_predictions[order(dnn_predictions$Index),] # submission needs to be in original order
+
+write.csv(dnn_predictions, '~/Desktop/gresearch/dnn_predictions032918.csv', na = '', row.names = FALSE)
+
